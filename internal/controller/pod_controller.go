@@ -71,7 +71,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	hostPorts := []forwarding.PortForward{}
 	for _, container := range pod.Spec.Containers {
 		// TODO: consider indexed access to the slice to be copy-free
-		//var nodeName string
+		// var nodeName string
 		for _, port := range container.Ports {
 			if port.HostPort == 0 {
 				continue
@@ -84,15 +84,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 			}
 
 			hostPorts = append(hostPorts, info)
-			//nodeName = pod.Spec.NodeName
 		}
-		//node := &v1.Node{}
-		//if err := r.Get(ctx, client.ObjectKey{Name: nodeName}, node); err != nil {
-		//	log.Error(err, "Unable to get node")
-		//	return ctrl.Result{}, err
-		//}
-
-		//node.Status.Addresses
 	}
 
 	finalizerName := fmt.Sprintf("finalizer.%s/v1", Annotation)
@@ -129,7 +121,6 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 // SetupWithManager sets up the controller with the Manager.
 func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		// Uncomment the following line adding a pointer to an instance of the controlled resource as an argument
 		For(&v1.Pod{}).
 		Named("pod").
 		Complete(r)
@@ -138,15 +129,6 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *PodReconciler) controls(pod *v1.Pod) bool {
 	for annotation, value := range pod.GetAnnotations() {
 		if annotation == fmt.Sprintf("%s/enable", Annotation) && value == "true" {
-			return true
-		}
-	}
-	return false
-}
-
-func hasFinalizer(pod *v1.Pod, name string) bool {
-	for _, finalizer := range pod.GetObjectMeta().GetFinalizers() {
-		if finalizer == name {
 			return true
 		}
 	}
