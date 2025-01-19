@@ -18,12 +18,13 @@ type UnifiClient struct {
 }
 
 func NewUnifiClient(site string, baseURL string, user string, pass string, insecure bool) (UnifiClient, error) {
-	ctx := context.TODO()
+	var err error
 
+	ctx := context.TODO()
 	c := unifi.Client{}
 	if insecure {
 		jar, _ := cookiejar.New(nil)
-		c.SetHTTPClient(&http.Client{
+		err = c.SetHTTPClient(&http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
 					InsecureSkipVerify: true,
@@ -31,8 +32,11 @@ func NewUnifiClient(site string, baseURL string, user string, pass string, insec
 			},
 			Jar: jar,
 		})
+		if err != nil {
+			return UnifiClient{}, err
+		}
 	}
-	err := c.SetBaseURL(baseURL)
+	err = c.SetBaseURL(baseURL)
 	if err != nil {
 		return UnifiClient{}, err
 	}
@@ -73,7 +77,7 @@ func (c UnifiClient) ListPortForwards(ctx context.Context) ([]PortForward, error
 		return nil, err
 	}
 
-	var convertedForwards []PortForward
+	convertedForwards := []PortForward{}
 	for _, forward := range forwards {
 		// TODO: fwdport can have value like 8000-8001!
 		// Right now, we skip them since those aren't related to the controller

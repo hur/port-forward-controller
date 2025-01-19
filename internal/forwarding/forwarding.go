@@ -26,14 +26,12 @@ type PortForward struct {
 	Name    string
 	Address string
 	Port    int32
-	//RouterPort int32
 }
 
 type Client interface {
 	CreatePortForwards(ctx context.Context, forwards []PortForward) error
 	ListPortForwards(ctx context.Context) ([]PortForward, error)
 	DeletePortForwards(ctx context.Context, forwards []PortForward) error
-	//UpdatePortForwards(ctx context.Context, forwards []PortForward)
 }
 
 type ForwardingReconciler struct {
