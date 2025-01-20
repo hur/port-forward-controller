@@ -5,6 +5,8 @@
 domain: atte.cloud
 layout:
 - go.kubebuilder.io/v4
+plugins:
+  helm.kubebuilder.io/v1-alpha: {}
 projectName: port-forward-controller
 repo: atte.cloud/port-forward-controller
 resources:
