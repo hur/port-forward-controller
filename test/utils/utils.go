@@ -34,6 +34,9 @@ const (
 
 	certmanagerVersion = "v1.16.0"
 	certmanagerURLTmpl = "https://github.com/jetstack/cert-manager/releases/download/%s/cert-manager.yaml"
+
+	unifiControllerVersion   = "v9.0.108"
+	mikrotikContainerVersion = "7.17"
 )
 
 func warnError(err error) {
@@ -248,4 +251,253 @@ func UncommentCode(filename, target, prefix string) error {
 	// false positive
 	// nolint:gosec
 	return os.WriteFile(filename, out.Bytes(), 0644)
+}
+
+const unifiControllerSpecTmpl = `
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unifi
+  labels:
+    app.kubernetes.io/instance: unifi
+    app.kubernetes.io/name: unifi
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: controller
+    protocol: TCP
+    name: controller
+  - port: 10001
+    targetPort: discovery
+    protocol: UDP
+    name: discovery
+  - port: 8443
+    targetPort: http
+    protocol: TCP
+    name: http
+  - port: 6789
+    targetPort: speedtest
+    protocol: TCP
+    name: speedtest
+  - port: 3478
+    targetPort: stun
+    protocol: UDP
+    name: stun
+  - port: 5514
+    targetPort: syslog
+    protocol: UDP
+    name: syslog
+  selector:
+    app.kubernetes.io/name: unifi
+    app.kubernetes.io/instance: unifi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unifi
+  labels:
+    app.kubernetes.io/instance: unifi
+    app.kubernetes.io/name: unifi
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: unifi
+      app.kubernetes.io/instance: unifi
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: unifi
+        app.kubernetes.io/instance: unifi
+    spec:
+      serviceAccountName: default
+      automountServiceAccountToken: true
+      securityContext:
+        fsGroup: 999
+      dnsPolicy: ClusterFirst
+      enableServiceLinks: true
+      containers:
+        - name: unifi
+          image: "jacobalberty/unifi:%s"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: JVM_INIT_HEAP_SIZE
+              value: null
+            - name: JVM_MAX_HEAP_SIZE
+              value: 1024M
+            - name: RUNAS_UID0
+              value: "false"
+            - name: TZ
+              value: UTC
+            - name: UNIFI_GID
+              value: "999"
+            - name: UNIFI_STDOUT
+              value: "true"
+            - name: UNIFI_UID
+              value: "999"
+          ports:
+            - name: controller
+              containerPort: 8080
+              protocol: TCP
+            - name: discovery
+              containerPort: 10001
+              protocol: UDP
+            - name: http
+              containerPort: 8443
+              protocol: TCP
+            - name: speedtest
+              containerPort: 6789
+              protocol: TCP
+            - name: stun
+              containerPort: 3478
+              protocol: UDP
+            - name: syslog
+              containerPort: 5514
+              protocol: UDP
+          livenessProbe:
+            tcpSocket:
+              port: 8443
+            initialDelaySeconds: 0
+            failureThreshold: 3
+            timeoutSeconds: 1
+            periodSeconds: 10
+          readinessProbe:
+            tcpSocket:
+              port: 8443
+            initialDelaySeconds: 0
+            failureThreshold: 3
+            timeoutSeconds: 1
+            periodSeconds: 10
+          startupProbe:
+            tcpSocket:
+              port: 8443
+            initialDelaySeconds: 0
+            failureThreshold: 30
+            timeoutSeconds: 1
+            periodSeconds: 5
+`
+
+func InstallUnifiController() (string, error) {
+	unifiControllerSpec := fmt.Sprintf(unifiControllerSpecTmpl, unifiControllerVersion)
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(unifiControllerSpec)
+	if _, err := Run(cmd); err != nil {
+		return "", err
+	}
+	// Wait for cert-manager-webhook to be ready, which can take time if cert-manager
+	// was re-installed after uninstalling on a cluster.
+	cmd = exec.Command("kubectl", "wait", "deployment.apps/unifi",
+		"--for", "condition=Available",
+		"--namespace", "default",
+		"--timeout", "5m",
+	)
+	_, err := Run(cmd)
+	if err != nil {
+		return "", err
+	}
+	out, err := exec.Command("kubectl", "get", "service", "unifi", "-o", "jsonpath='{.spec.clusterIP}'").Output()
+	// HACK: out is wrapped in single quotes and contains trailing newline
+	res := ""
+	if len(out) > 3 {
+		res = string(out)[1:][:len(out)-3]
+	}
+	return res, err
+}
+
+func UninstallUnifiController() {
+	unifiControllerSpec := fmt.Sprintf(unifiControllerSpecTmpl, unifiControllerVersion)
+	cmd := exec.Command("kubectl", "delete", "-f", "-")
+	cmd.Stdin = strings.NewReader(unifiControllerSpec)
+	if _, err := Run(cmd); err != nil {
+		warnError(err)
+	}
+
+}
+
+const mikrotikContainerSpecTmpl = `
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mikrotik
+  labels:
+    app.kubernetes.io/instance: mikrotik
+    app.kubernetes.io/name: mikrotik
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8728
+    targetPort: controller
+    protocol: TCP
+    name: controller
+  selector:
+    app.kubernetes.io/name: mikrotik
+    app.kubernetes.io/instance: mikrotik
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mikrotik
+  labels:
+    app.kubernetes.io/instance: mikrotik
+    app.kubernetes.io/name: mikrotik
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mikrotik
+      app.kubernetes.io/instance: mikrotik
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mikrotik
+        app.kubernetes.io/instance: mikrotik
+    spec:
+      serviceAccountName: default
+      automountServiceAccountToken: true
+      securityContext:
+        fsGroup: 999
+      dnsPolicy: ClusterFirst
+      enableServiceLinks: true
+      containers:
+        - name: mikrotik
+          image: "jacobalberty/unifi:%s"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: controller
+              containerPort: 8728
+              protocol: TCP
+`
+
+func InstallMikrotikContainer() (string, error) {
+	mikrotikContainerSpec := fmt.Sprintf(mikrotikContainerSpecTmpl, mikrotikContainerVersion)
+	cmd := exec.Command("kubectl", "apply", "-f", "-")
+	cmd.Stdin = strings.NewReader(mikrotikContainerSpec)
+	if _, err := Run(cmd); err != nil {
+		return "", err
+	}
+	// Wait for cert-manager-webhook to be ready, which can take time if cert-manager
+	// was re-installed after uninstalling on a cluster.
+	cmd = exec.Command("kubectl", "wait", "deployment.apps/mikrotik",
+		"--for", "condition=Available",
+		"--namespace", "default",
+		"--timeout", "5m",
+	)
+	_, err := Run(cmd)
+	if err != nil {
+		return "", err
+	}
+	out, err := exec.Command("kubectl", "get", "service", "mikrotik", "-o", "jsonpath='{.spec.clusterIP}'").Output()
+	// HACK: out is wrapped in single quotes and contains trailing newline
+	res := ""
+	if len(out) > 3 {
+		res = string(out)[1:][:len(out)-3]
+	}
+	return res, err
 }

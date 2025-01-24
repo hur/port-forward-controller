@@ -43,6 +43,7 @@ var (
 	testEnv   *envtest.Environment
 	cfg       *rest.Config
 	k8sClient client.Client
+	unifiUrl  string
 )
 
 func TestControllers(t *testing.T) {

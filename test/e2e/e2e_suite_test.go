@@ -65,6 +65,17 @@ var _ = BeforeSuite(func() {
 	_, err := utils.Run(cmd)
 	ExpectWithOffset(1, err).NotTo(HaveOccurred(), "Failed to build the manager(Operator) image")
 
+	// By("ensuring that a Unifi Network Controller is enabled")
+	// unifiUrl, err := utils.InstallUnifiController()
+	// Expect(err).NotTo(HaveOccurred())
+	// Expect(unifiUrl).NotTo(BeEmpty())
+
+	// By("ensuring correct environment for the operator is set")
+	// Expect(os.Setenv("UNIFI_SITE", "default")).To(Succeed())
+	// Expect(os.Setenv("UNIFI_BASEURL", "http://"+unifiUrl+":8443")).To(Succeed())
+	// Expect(os.Setenv("UNIFI_USER", "test")).To(Succeed())
+	// Expect(os.Setenv("UNIFI_PASS", "test")).To(Succeed())
+	// Expect(os.Setenv("UNIFI_INSECURE", "true")).To(Succeed())
 	// TODO(user): If you want to change the e2e test vendor from Kind, ensure the image is
 	// built and available before running the tests. Also, remove the following block.
 	By("loading the manager(Operator) image on Kind")
@@ -98,6 +109,8 @@ var _ = BeforeSuite(func() {
 })
 
 var _ = AfterSuite(func() {
+	_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling Unifi Network Controller...\n")
+	utils.UninstallUnifiController()
 	// Teardown Prometheus and CertManager after the suite if not skipped and if they were not already installed
 	if !skipPrometheusInstall && !isPrometheusOperatorAlreadyInstalled {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Uninstalling Prometheus Operator...\n")
